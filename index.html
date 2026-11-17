@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL EXPLAIN Helper</title>
+<style>
+:root{color-scheme:light;--bg:#f5f6f8;--surface:#fff;--sub:#f0f2f5;--line:#dde1e7;--line-2:#c4cad3;--text:#14181f;--muted:#5b6575;--accent:#2f5fb3;--accent-ink:#fff;--accent-soft:#e8eef9;--warn:#7a5000;--warn-bg:#fbf4e2;--code-bg:#111620;--code-ink:#e4e9f0;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0d1117;--surface:#161b22;--sub:#1c2330;--line:#2b3340;--line-2:#3b4555;--text:#e6ebf1;--muted:#97a2b3;--accent:#7aa7ff;--accent-ink:#0a1222;--accent-soft:#1d2b47;--warn:#e7b948;--warn-bg:#2a2311;--code-bg:#0a0e14;--code-ink:#e4e9f0}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--sans)}
+header{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:16px;font-weight:650}
+h2{margin:0;font-size:14px;font-weight:600}
+h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{display:grid;place-items:center;width:28px;height:28px;border-radius:6px;background:var(--accent);color:var(--accent-ink);font:700 11px var(--mono)}
+button{font:600 12.5px var(--sans);color:var(--text);background:var(--surface);border:1px solid var(--line-2);border-radius:6px;padding:6px 11px;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.primary:hover{color:var(--accent-ink);filter:brightness(1.08)}
+button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tabs{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--sub)}
+.tab{border:0;background:none;color:var(--muted);padding:7px 14px}
+.tab[aria-selected=true]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,45fr) minmax(0,55fr);gap:16px;align-items:start;max-width:1600px;margin:0 auto;padding:20px 24px 48px}
+@media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr);padding:16px}}
+.card{display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.card-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.card-body{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--surface)}
+.seg button+button{border-left:1px solid var(--line-2)}
+.check{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.output,textarea{width:100%;margin:0;font:12.5px/1.6 var(--mono);color:var(--text);background:var(--sub);border:1px solid var(--line-2);border-radius:8px;padding:12px 14px;tab-size:4}
+textarea.editor{min-height:440px;resize:vertical;white-space:pre;overflow:auto}
+textarea.editor.wrap{white-space:pre-wrap}
+.output{min-height:480px;overflow:auto;white-space:pre;background:var(--code-bg);color:var(--code-ink);border-color:var(--line)}
+textarea.output{resize:vertical}
+.notice,.callout{padding:10px 12px;border:1px solid var(--warn);border-radius:8px;background:var(--warn-bg);font-size:13px}
+.callout{border-color:var(--accent);background:var(--accent-soft)}
+.params{padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--sub)}
+.params h3{margin-top:0}
+.param-grid{display:flex;flex-wrap:wrap;gap:8px}
+.param{display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--surface);font:12px var(--mono)}
+.param .badge{font:600 10px var(--sans);color:var(--muted);text-transform:uppercase}
+.param input{width:150px;border:0;background:none;color:var(--text);font:inherit;outline:none}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.kpis{grid-template-columns:1fr}}
+.kpi{min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--sub)}
+.kpi small,.kpi strong,.kpi span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpi small{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase}
+.kpi strong{font:600 16px var(--mono);margin:2px 0}
+.kpi span{font-size:12px;color:var(--muted)}
+ol.ops{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.op-head{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+.op-head code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px var(--mono)}
+.op-head span{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+.bar{height:6px;margin:5px 0;background:var(--sub);border-radius:3px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--accent)}
+.meta{font:11.5px var(--mono);color:var(--muted)}
+.finding{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.finding header{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;padding:10px 12px;background:var(--sub);border-bottom:1px solid var(--line)}
+.finding h4{margin:0;font-size:13px;font-weight:600}
+.tag{padding:2px 7px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font:600 11px var(--mono);white-space:nowrap}
+.finding p{margin:0;padding:10px 12px;font-size:13px;color:var(--muted)}
+.finding pre{margin:0;padding:10px 12px;background:var(--code-bg);color:var(--code-ink);font:12px/1.55 var(--mono);overflow:auto}
+#toast{position:fixed;right:20px;bottom:20px;padding:9px 14px;border-radius:6px;background:var(--text);color:var(--bg);font-size:13px;opacity:0;transform:translateY(6px);transition:opacity .15s,transform .15s;pointer-events:none}
+#toast.show{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo" aria-hidden="true">EX</span><h1>SQL EXPLAIN Helper</h1></div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" type="button" data-tab="1" aria-selected="true" aria-controls="panel1">1 · Build script</button>
+    <button class="tab" role="tab" type="button" data-tab="2" aria-selected="false" aria-controls="panel2">2 · Analyze plan</button>
+  </div>
+  <button type="button" id="themeBtn">Dark mode</button>
+</header>
+
+<main id="panel1" class="grid" role="tabpanel">
+  <section class="card" aria-labelledby="hSrc">
+    <div class="card-head">
+      <h2 id="hSrc">Source</h2>
+      <div class="row">
+        <button type="button" data-sample="sp">Sample procedure</button>
+        <button type="button" data-sample="view">Sample view</button>
+        <button type="button" id="clearSrc">Clear</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <span>Dialect</span>
+        <div class="seg" role="group" aria-label="Dialect">
+          <button type="button" data-dialect="mysql" aria-pressed="true">MySQL 8.0+</button>
+          <button type="button" data-dialect="postgres" aria-pressed="false">PostgreSQL</button>
+        </div>
+        <span>Variables</span>
+        <div class="seg" role="group" aria-label="Variable binding">
+          <button type="button" data-bind="session" aria-pressed="true">@variables</button>
+          <button type="button" data-bind="inline" aria-pressed="false">Inline literals</button>
+        </div>
+      </div>
+      <textarea id="src" class="editor" spellcheck="false" aria-label="SQL source" placeholder="Paste CREATE PROCEDURE, CREATE FUNCTION, CREATE VIEW, or a query"></textarea>
+      <p id="notice" class="notice" hidden></p>
+      <section id="params" class="params" hidden>
+        <h3>Parameters and variables (editable)</h3>
+        <div id="paramGrid" class="param-grid"></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="hOut">
+    <div class="card-head">
+      <h2 id="hOut">Runnable EXPLAIN ANALYZE script</h2>
+      <div class="row">
+        <button type="button" id="copy1">Copy script</button>
+        <button type="button" id="next" class="primary">Analyze output →</button>
+      </div>
+    </div>
+    <div class="card-body"><pre id="out" class="output" tabindex="0"></pre></div>
+  </section>
+</main>
+
+<main id="panel2" class="grid" role="tabpanel" hidden>
+  <section class="card" aria-labelledby="hPlan">
+    <div class="card-head">
+      <h2 id="hPlan">EXPLAIN ANALYZE output</h2>
+      <div class="row">
+        <button type="button" id="wrap" aria-pressed="false">Wrap lines</button>
+        <button type="button" id="sample2">Sample plan</button>
+        <button type="button" id="clear2">Clear</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <span>Object</span>
+        <div class="seg" role="group" aria-label="Object type">
+          <button type="button" data-obj="SP" aria-pressed="true">Procedure</button>
+          <button type="button" data-obj="VIEW" aria-pressed="false">View</button>
+          <button type="button" data-obj="QUERY" aria-pressed="false">Query</button>
+        </div>
+      </div>
+      <textarea id="plan" class="editor" spellcheck="false" aria-label="EXPLAIN ANALYZE output" placeholder="Paste EXPLAIN ANALYZE output (MySQL tree or PostgreSQL text)"></textarea>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="hRep">
+    <div class="card-head">
+      <h2 id="hRep">Report</h2>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="incSql" checked> Include Tab 1 SQL</label>
+        <div class="seg" role="group" aria-label="Report view">
+          <button type="button" data-view="prompt" aria-pressed="true">Prompt</button>
+          <button type="button" data-view="breakdown" aria-pressed="false">Breakdown</button>
+        </div>
+        <button type="button" id="copyRep" class="primary">Copy prompt</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="kpis">
+        <div class="kpi"><small>Total runtime</small><strong id="kRun">—</strong><span id="kRunSub">Paste a plan</span></div>
+        <div class="kpi"><small>Top self time</small><strong id="kBot">—</strong><span id="kBotSub">—</span></div>
+        <div class="kpi"><small>Root rows</small><strong id="kDrift">—</strong><span id="kDriftSub">—</span></div>
+      </div>
+      <textarea id="report" class="output" readonly aria-label="Prompt-ready report"></textarea>
+      <div id="breakdown" hidden></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => [...document.querySelectorAll(sel)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const code = (s) => '`' + String(s).replace(/`/g, '') + '`';
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const unq = (s) => s.replace(/^['"`]|['"`]$/g, '');
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+const fmtMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${ms.toFixed(2)} ms`);
+const isoDay = (off) => { const d = new Date(); d.setDate(d.getDate() + off); return d.toLocaleDateString('en-CA'); };
+const debounce = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+
+const DML = /^(INSERT|UPDATE|DELETE|MERGE)$/;
+const TOKEN_RE = /\s+|--[^\n]*|#[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|'(?:[^'\\]|\\[\s\S]|'')*'?|"(?:[^"\\]|\\[\s\S]|"")*"?|`[^`]*`?|\$\w*\$|[A-Za-z_][\w$]*|\d[\d.]*|[\s\S]/g;
+const VIEW_RE = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:ALGORITHM\s*=\s*\w+\s+)?(?:DEFINER\s*=\s*\S+\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\s+([`"\w.$]+)\s+AS\s+([\s\S]+)/i;
+const DECLARE_RE = /^DECLARE\s+((?:[`"]?[\w$]+[`"]?)(?:\s*,\s*[`"]?[\w$]+[`"]?)*)\s+([\s\S]+?)(?:\s+DEFAULT\s+([\s\S]+?))?\s*$/i;
+
+const state = { dialect: 'mysql', bind: 'session', objType: 'SP', view: 'prompt', text: '', routine: null, vars: new Map(), sql: '', report: '' };
+
+/* ---------- Tokenizer and statement helpers ---------- */
+function tokenize(src) {
+  return [...src.matchAll(TOKEN_RE)].map((m) => {
+    const raw = m[0], c = raw[0];
+    let type;
+    if (/\s/.test(c)) type = 'ws';
+    else if (raw.startsWith('--') || c === '#' || raw.startsWith('/*')) type = 'comment';
+    else if (c === "'") type = 'str';
+    else if (c === '"' || c === '`') type = 'quoted';
+    else if (/[A-Za-z_]/.test(c)) type = 'word';
+    else if (/\d/.test(c)) type = 'num';
+    else type = raw.length === 1 ? c : 'other';
+    return { type, raw, up: raw.toUpperCase(), start: m.index, end: m.index + raw.length };
+  });
+}
+const isWord = (t, ...w) => !!t && t.type === 'word' && w.includes(t.up);
+const skip = (toks, i) => { while (i < toks.length && (toks[i].type === 'ws' || toks[i].type === 'comment')) i++; return i; };
+const prevSig = (toks, i) => { let k = i - 1; while (k >= 0 && (toks[k].type === 'ws' || toks[k].type === 'comment')) k--; return k; };
+const firstWord = (s) => { const t = tokenize(s).find((x) => x.type === 'word'); return t ? t.up : ''; };
+
+function stripDelims(src) {
+  let d = ';';
+  return src.split(/\r?\n/).reduce((out, line) => {
+    const m = line.match(/^\s*DELIMITER\s+(\S+)\s*$/i);
+    if (m) d = m[1];
+    else out.push(d === ';' ? line : line.split(d).join(';'));
+    return out;
+  }, []).join('\n');
+}
+function statementsOf(src) {
+  const toks = tokenize(src), out = [];
+  let from = 0;
+  for (const t of toks) if (t.type === ';') { out.push(src.slice(from, t.start)); from = t.end; }
+  out.push(src.slice(from));
+  return out.map((s) => s.trim()).filter(Boolean).map((raw) => ({ raw, first: firstWord(raw) }));
+}
+const usesOf = (text) => statementsOf(text).filter((c) => c.first === 'USE').map((c) => `${c.raw};`).join('\n');
+function findWord(toks, from, word) {
+  let depth = 0;
+  for (let j = from; j < toks.length; j++) {
+    const t = toks[j];
+    if (t.type === '(') depth++;
+    else if (t.type === ')') depth--;
+    else if (t.type === ';') return -1;
+    else if (depth === 0 && isWord(t, word)) return j;
+  }
+  return -1;
+}
+function matchParen(toks, open) {
+  let d = 0;
+  for (let j = open; j < toks.length; j++) {
+    if (toks[j].type === '(') d++;
+    else if (toks[j].type === ')' && --d === 0) return j;
+  }
+  return -1;
+}
+
+/* ---------- MySQL routine parser (BEGIN ... END bodies, IF, WHILE/LOOP/REPEAT) ---------- */
+function stmtEnd(toks, i) {
+  let paren = 0, depth = 0;
+  for (; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.type === '(') paren++;
+    else if (t.type === ')') paren--;
+    else if (paren === 0 && t.type === ';' && depth === 0) return i;
+    else if (paren === 0 && t.type === 'word') {
+      if ((t.up === 'CASE' || t.up === 'BEGIN') && !isWord(toks[prevSig(toks, i)], 'END')) depth++;
+      else if (t.up === 'END' && !isWord(toks[skip(toks, i + 1)], 'IF', 'WHILE', 'LOOP', 'REPEAT')) {
+        if (depth === 0) return i;
+        depth--;
+      }
+    }
+  }
+  return toks.length;
+}
+const BLOCK_END = ['END', 'ELSE', 'ELSEIF', 'UNTIL'];
+function parseBlock(toks, src, i) {
+  const nodes = [];
+  for (;;) {
+    i = skip(toks, i);
+    const t = toks[i];
+    if (!t) return { nodes, i };
+    if (t.type === ';') { i++; continue; }
+    if (isWord(t, ...BLOCK_END)) return { nodes, i };
+    if (isWord(t, 'IF')) { const r = parseIf(toks, src, i); nodes.push(r.node); i = r.i; }
+    else if (isWord(t, 'WHILE', 'LOOP', 'REPEAT')) { const r = parseLoop(toks, src, i); nodes.push(r.node); i = r.i; }
+    else if (isWord(t, 'BEGIN')) { const r = parseBlock(toks, src, i + 1); nodes.push(...r.nodes); i = r.i + 1; }
+    else {
+      const e = stmtEnd(toks, i);
+      nodes.push({ k: 'stmt', raw: src.slice(t.start, toks[e - 1].end).trim() });
+      i = e;
+    }
+  }
+}
+function parseIf(toks, src, i) {
+  const branches = [];
+  let kw = 'IF';
+  for (;;) {
+    let label = 'ELSE', from = i + 1;
+    if (kw !== 'ELSE') {
+      const th = findWord(toks, i + 1, 'THEN');
+      if (th < 0) return { node: { k: 'if', branches }, i: toks.length };
+      label = `${kw} ${src.slice(toks[i].end, toks[th].start).trim()}`;
+      from = th + 1;
+    }
+    const body = parseBlock(toks, src, from);
+    branches.push({ label, nodes: body.nodes });
+    i = body.i;
+    if (isWord(toks[i], 'ELSEIF')) kw = 'ELSEIF';
+    else if (isWord(toks[i], 'ELSE')) kw = 'ELSE';
+    else break;
+  }
+  const at = skip(toks, i + 1);
+  return { node: { k: 'if', branches }, i: isWord(toks[at], 'IF') ? at + 1 : i + 1 };
+}
+function parseLoop(toks, src, i) {
+  const kw = toks[i].up;
+  let label = kw, from = i + 1;
+  if (kw === 'WHILE') {
+    const d = findWord(toks, i + 1, 'DO');
+    if (d < 0) return { node: { k: 'loop', label, nodes: [] }, i: toks.length };
+    label = `WHILE ${src.slice(toks[i].end, toks[d].start).trim()}`;
+    from = d + 1;
+  }
+  const body = parseBlock(toks, src, from);
+  let j = body.i;
+  if (isWord(toks[j], 'UNTIL')) j = findWord(toks, j + 1, 'END');
+  if (j < 0) return { node: { k: 'loop', label, nodes: body.nodes }, i: toks.length };
+  const at = skip(toks, j + 1);
+  return { node: { k: 'loop', label, nodes: body.nodes }, i: isWord(toks[at], kw) ? at + 1 : j + 1 };
+}
+
+/* ---------- Variables ---------- */
+function inferValue(name, type, def, body) {
+  const T = type.toUpperCase(), n = name.toLowerCase();
+  const isBool = /\b(BOOL|BOOLEAN|TINYINT\(1\))\b/.test(T) || /^(is|has|include|flag)_/.test(n);
+  const isNum = !isBool && /\b(INT|INTEGER|BIGINT|SMALLINT|TINYINT|MEDIUMINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|REAL)\b/.test(T);
+  const isDT = /\b(DATETIME|TIMESTAMP)\b/.test(T);
+  const isDate = !isDT && /\bDATE\b/.test(T);
+  const k = { isBool, isNum, isDT, isDate };
+  const d = (def || '').trim();
+  if (d && !/^null$/i.test(d)) return { value: unq(d), ...k };
+  const inList = body.match(new RegExp(`\\b${escRe(name)}\\s+IN\\s*\\(\\s*'([^']*)'`, 'i'));
+  if (inList) return { value: inList[1], ...k };
+  const coal = body.match(new RegExp(`\\b(?:COALESCE|IFNULL)\\s*\\(\\s*${escRe(name)}\\s*,\\s*([^)\\s,]+)`, 'i'));
+  if (coal) return { value: unq(coal[1]), ...k };
+  if (isDT || isDate) {
+    const end = /(^|_)(to|end)(_|$)|todate|enddate/.test(n);
+    const day = isoDay(end ? 0 : -30);
+    return { value: isDT ? `${day} ${end ? '23:59:59' : '00:00:00'}` : day, ...k };
+  }
+  if (isBool) return { value: state.dialect === 'postgres' ? 'true' : '1', ...k };
+  if (isNum) return { value: /limit|size|top/.test(n) ? '1000' : /offset|skip|page/.test(n) ? '0' : '1', ...k };
+  return { value: '', ...k };
+}
+const makeVar = (name, kind, type, def, body) => ({ name, kind, type, ...inferValue(name, type, def, body) });
+function parseParams(raw, body) {
+  const parts = [];
+  let d = 0, buf = '';
+  for (const ch of raw) {
+    if (ch === '(') d++;
+    else if (ch === ')') d--;
+    if (ch === ',' && d === 0) { parts.push(buf); buf = ''; } else buf += ch;
+  }
+  parts.push(buf);
+  return parts
+    .map((p) => p.trim().match(/^(?:(IN|OUT|INOUT)\s+)?[`"]?([\w$]+)[`"]?\s+([A-Za-z]\w*(?:\s*\([^)]*\))?)/i))
+    .filter(Boolean)
+    .map((m) => makeVar(m[2], (m[1] || 'IN').toUpperCase(), m[3].toUpperCase(), null, body));
+}
+function collectDeclares(nodes, body, out) {
+  for (const n of nodes) {
+    if (n.k === 'stmt') {
+      const s = n.raw;
+      if (/^DECLARE\s+(CONTINUE|EXIT|UNDO)\b|^DECLARE\s+\S+\s+(CONDITION|CURSOR)\b|\bCURSOR\s+FOR\b/i.test(s)) continue;
+      const m = s.match(DECLARE_RE);
+      if (m) m[1].split(',').forEach((nm) => out.push(makeVar(unq(nm.trim()), 'DECLARE', m[2].trim().toUpperCase(), m[3], body)));
+    } else if (n.k === 'if') n.branches.forEach((b) => collectDeclares(b.nodes, body, out));
+    else collectDeclares(n.nodes, body, out);
+  }
+  return out;
+}
+function parseRoutine(src, toks) {
+  let k = -1;
+  for (let j = 0; j < toks.length && k < 0; j++) {
+    if (!isWord(toks[j], 'CREATE')) continue;
+    for (let m = j + 1; m < toks.length && toks[m].type !== ';'; m++) {
+      if (isWord(toks[m], 'PROCEDURE', 'FUNCTION')) { k = m; break; }
+    }
+  }
+  if (k < 0) return null;
+  const id = (t) => (t ? t.raw.replace(/[`"]/g, '') : '');
+  let p = skip(toks, k + 1), name = id(toks[p]), q = skip(toks, p + 1);
+  while (toks[q] && toks[q].type === '.') { p = skip(toks, q + 1); name += `.${id(toks[p])}`; q = skip(toks, p + 1); }
+  if (!toks[q] || toks[q].type !== '(') return null;
+  const close = matchParen(toks, q);
+  if (close < 0) return null;
+  let b = close + 1;
+  while (b < toks.length && toks[b].type !== ';' && !isWord(toks[b], 'BEGIN')) b++;
+  if (!isWord(toks[b], 'BEGIN')) return null;
+  const body = src.slice(toks[b].end);
+  const nodes = parseBlock(toks, src, b + 1).nodes;
+  return {
+    name,
+    params: parseParams(src.slice(toks[q].end, toks[close].start), body),
+    declares: collectDeclares(nodes, body, []),
+    body: nodes,
+  };
+}
+
+/* ---------- SQL rewriting ---------- */
+function literal(v) {
+  const raw = String(v.value ?? '').trim(), pg = state.dialect === 'postgres';
+  if (/^null$/i.test(raw)) return 'NULL';
+  if (v.isBool) return /^(1|true|t|yes)$/i.test(raw) ? (pg ? 'TRUE' : '1') : (pg ? 'FALSE' : '0');
+  if (v.isNum && /^-?\d+(\.\d+)?$/.test(raw)) return raw;
+  const s = `'${(pg ? raw : raw.replace(/\\/g, '\\\\')).replace(/'/g, "''")}'`;
+  if (pg && v.isDT) return `TIMESTAMP ${s}`;
+  if (pg && v.isDate) return `DATE ${s}`;
+  return s;
+}
+function rewrite(sql, mode, inl) {
+  const toks = tokenize(sql);
+  let out = '';
+  toks.forEach((t, i) => {
+    if (t.type === 'word') {
+      const key = t.raw.toLowerCase(), prev = toks[prevSig(toks, i)];
+      if (!(prev && (prev.type === '.' || prev.type === '@')) && (state.vars.has(key) || inl.has(key))) {
+        const v = state.vars.get(key);
+        if (prev && (prev.up === 'LIMIT' || prev.up === 'OFFSET')) {
+          const n = parseInt(String(v ? v.value : '').replace(/[^\d-]/g, ''), 10);
+          out += Number.isFinite(n) ? n : prev.up === 'OFFSET' ? 0 : 1000;
+          return;
+        }
+        if (mode === 'inline' || state.dialect === 'postgres') out += inl.get(key) ?? (v ? literal(v) : t.raw);
+        else out += v ? `@${v.name}` : t.raw;
+        return;
+      }
+    }
+    out += t.raw;
+  });
+  return out;
+}
+
+/* ---------- Script generation ---------- */
+const explainPrefix = () => (state.dialect === 'postgres' ? 'EXPLAIN (ANALYZE, BUFFERS)' : 'EXPLAIN ANALYZE');
+const isGuard = (b) => b.nodes.length > 0 && b.nodes.every((x) => x.k === 'stmt' && /^(SIGNAL|RESIGNAL)\b/i.test(x.raw));
+
+function genRoutine(r, raw) {
+  const session = state.bind === 'session', mode = session ? 'session' : 'inline';
+  const inl = new Map(), init = [], setup = [], explain = [], cleanup = [];
+  if (session) state.vars.forEach((v) => init.push(`SET @${v.name} = ${literal(v)};`));
+  const emit = (n, path) => {
+    const s = n.raw, first = firstWord(s);
+    if (first === 'DECLARE') return;
+    if (first === 'SET') {
+      const m = s.match(/^SET\s+[`"@]*([\w$]+)[`"]?\s*=\s*([\s\S]+)$/i);
+      if (!m) return;
+      const rhs = m[2].trim();
+      if (session) setup.push(`SET @${m[1]} = ${rewrite(rhs, mode, inl)};`);
+      else inl.set(m[1].toLowerCase(), `(${rewrite(rhs, mode, inl)})`);
+      return;
+    }
+    if (/^(CREATE|DROP)\s+(GLOBAL\s+)?TEMPORARY\s+TABLE\b/i.test(s)) {
+      (first === 'CREATE' ? setup : cleanup).push(`${rewrite(s, mode, inl)};`);
+      return;
+    }
+    if (first === 'SELECT' && /\sINTO\s/i.test(s) && !/\bINTO\s+(OUTFILE|DUMPFILE)\b/i.test(s)) {
+      if (session) setup.push(`${rewrite(s, mode, inl)};`);
+      explain.push({ path, sql: rewrite(s.replace(/\s+INTO\s+[\s\S]+?(?=\s+FROM\b)/i, ''), mode, inl) });
+      return;
+    }
+    const body = s.replace(/^RETURN\s+QUERY\s+/i, '');
+    if (/^(WITH|SELECT|UPDATE|DELETE|INSERT)\b/i.test(body)) explain.push({ path, sql: rewrite(body, mode, inl) });
+  };
+  const visit = (nodes, path) => nodes.forEach((n) => {
+    if (n.k === 'stmt') emit(n, path);
+    else if (n.k === 'if') n.branches.forEach((b) => { if (!isGuard(b)) visit(b.nodes, [...path, b.label]); });
+    else visit(n.nodes, [...path, n.label]);
+  });
+  visit(r.body, []);
+  const dml = explain.some((q) => DML.test(firstWord(q.sql)));
+  const parts = [usesOf(raw), `-- Runnable EXPLAIN ANALYZE script for ${r.name}`];
+  if (dml) parts.push('START TRANSACTION; -- writes run inside a transaction that is rolled back');
+  if (init.length) parts.push(`-- 1. Parameters and variables\n${init.join('\n')}`);
+  if (setup.length) parts.push(`-- 2. Setup: runs without EXPLAIN, in order\n${setup.join('\n')}`);
+  parts.push(explain.length
+    ? `-- 3. Explainable queries\n${explain.map((q) => `${q.path.length ? `-- [Branch: ${q.path.join(' -> ')}]\n` : ''}EXPLAIN ANALYZE\n${q.sql};`).join('\n\n')}`
+    : '-- 3. No explainable queries found');
+  if (cleanup.length) parts.push(`-- 4. Cleanup\n${cleanup.join('\n')}`);
+  if (dml) parts.push('ROLLBACK;');
+  return { sql: parts.filter(Boolean).join('\n\n'), dml };
+}
+
+function genRaw(raw) {
+  const e = explainPrefix(), pg = state.dialect === 'postgres', lines = [];
+  let dml = false;
+  for (const c of statementsOf(raw)) {
+    if (['USE', 'SET', 'EXPLAIN'].includes(c.first) || /^(CREATE|DROP)\s+(GLOBAL\s+)?TEMP(ORARY)?\s+TABLE\b/i.test(c.raw)) {
+      lines.push(`${c.raw};`);
+    } else if (['WITH', 'SELECT', 'UPDATE', 'DELETE', 'INSERT'].includes(c.first)) {
+      dml = dml || DML.test(c.first);
+      lines.push(`${e}\n${c.raw};`);
+    } else if (c.first) {
+      lines.push(`-- Skipped ${c.first}: not explainable`);
+    }
+  }
+  if (dml) {
+    lines.unshift(pg
+      ? 'BEGIN; -- writes run inside a transaction that is rolled back'
+      : 'START TRANSACTION; -- writes run inside a transaction that is rolled back');
+    lines.push('ROLLBACK;');
+  }
+  return { sql: lines.join('\n\n') || '-- No explainable statements found.', dml };
+}
+
+function generate() {
+  const text = state.text, notes = [];
+  let r;
+  if (!text) {
+    r = { sql: '-- Paste a stored procedure, function, view, or query on the left.', dml: false };
+  } else if (state.routine) {
+    r = genRoutine(state.routine, text);
+  } else if (/\bCREATE\s+(OR\s+REPLACE\s+)?(DEFINER\s*=\s*\S+\s+)?(PROCEDURE|FUNCTION)\b/i.test(text)) {
+    notes.push(state.dialect === 'postgres'
+      ? 'PostgreSQL functions and procedures are not parsed yet. Paste the queries you want to profile.'
+      : 'Could not find a BEGIN ... END body. Check the routine, or paste its queries directly.');
+    r = { sql: '-- Routine body not parsed.', dml: false };
+  } else {
+    const vm = text.match(VIEW_RE);
+    if (vm) {
+      const q = vm[2].replace(/;\s*$/, '').trim();
+      const view = vm[1].replace(/[`"]/g, '');
+      r = {
+        sql: [usesOf(text),
+          '-- 1. The view as callers read it',
+          `${explainPrefix()}\nSELECT * FROM ${view} LIMIT 100;`,
+          '-- 2. The unwrapped base query',
+          `${explainPrefix()}\n${q};`].filter(Boolean).join('\n\n'),
+        dml: false,
+      };
+    } else {
+      r = genRaw(text);
+    }
+  }
+  if (r.dml) notes.push('EXPLAIN ANALYZE executes the statement. Writes are wrapped in a transaction and rolled back, but review the script before running it on a shared database.');
+  state.sql = r.sql;
+  $('out').textContent = r.sql;
+  $('notice').textContent = notes.join(' ');
+  $('notice').hidden = !notes.length;
+}
+
+function refresh() {
+  const text = stripDelims($('src').value.replace(/\u00a0/g, ' ')).trim();
+  const prev = state.vars;
+  state.text = text;
+  state.routine = state.dialect === 'mysql' && text ? parseRoutine(text, tokenize(text)) : null;
+  state.vars = new Map();
+  if (state.routine) {
+    [...state.routine.params, ...state.routine.declares].forEach((v) => {
+      const key = v.name.toLowerCase();
+      if (!state.vars.has(key)) state.vars.set(key, { ...v, key, value: prev.has(key) ? prev.get(key).value : v.value });
+    });
+  }
+  renderParams();
+  generate();
+  renderPlan();
+}
+function renderParams() {
+  const vars = [...state.vars.values()];
+  $('params').hidden = !vars.length;
+  $('paramGrid').innerHTML = vars.map((v) =>
+    `<label class="param"><span class="badge">${esc(v.kind)}</span><span>${esc(v.name)}</span><input data-key="${esc(v.key)}" value="${esc(v.value)}" spellcheck="false"></label>`
+  ).join('');
+}
+
+/* ---------- Plan analysis (MySQL tree and PostgreSQL text) ---------- */
+const COST_RE = /\(cost=(?:[\d.eE+-]+\.\.)?([\d.eE+-]+)\s+rows=([\d.eE+-]+)(?:\s+width=\d+)?\)/i;
+const ACT_RE = /\(actual\s+(?:time=([\d.eE+-]+)\.\.([\d.eE+-]+)\s+)?rows=([\d.eE+-]+)\s+loops=([\d.eE+-]+)\)/i;
+const topBy = (arr, key) => [...arr].sort((a, b) => b[key] - a[key])[0];
+
+const SAMPLES = {
+  sp: `USE sales;
+
+DROP PROCEDURE IF EXISTS get_order_summary;
+
+CREATE PROCEDURE get_order_summary(
+    IN p_from_date DATETIME,
+    IN p_to_date DATETIME,
+    IN p_status VARCHAR(20),
+    IN p_limit INT,
+    IN p_offset INT
+)
+BEGIN
+    DECLARE v_total_rows INT DEFAULT 0;
+
+    SET p_limit = COALESCE(p_limit, 1000);
+    SET p_offset = COALESCE(p_offset, 0);
+
+    IF p_from_date > p_to_date THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid date range';
+    END IF;
+
+    IF p_status = 'ALL' THEN
+        SELECT COUNT(*) INTO v_total_rows
+        FROM orders
+        WHERE created_at >= p_from_date AND created_at < p_to_date + INTERVAL 1 DAY;
+    ELSE
+        SELECT COUNT(*) INTO v_total_rows
+        FROM orders
+        WHERE status = p_status AND created_at >= p_from_date AND created_at < p_to_date + INTERVAL 1 DAY;
+    END IF;
+
+    SELECT o.id, o.customer_id, o.status, o.total_amount, o.created_at, v_total_rows AS total_rows
+    FROM orders o
+    LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.created_at >= p_from_date
+      AND o.created_at < p_to_date + INTERVAL 1 DAY
+      AND (p_status = 'ALL' OR o.status = p_status)
+    ORDER BY o.created_at ASC, o.id ASC
+    LIMIT p_limit OFFSET p_offset;
+END;`,
+  view: `USE sales;
+
+CREATE OR REPLACE VIEW v_order_summary AS
+SELECT o.id AS order_id, o.created_at, o.status, o.total_amount, c.id AS customer_id, c.name AS customer_name
+FROM orders o
+LEFT JOIN customers c ON c.id = o.customer_id
+WHERE o.is_deleted = 0;`,
+  plan: `-> Table scan on v_order_summary  (cost=76775..77179 rows=32091) (actual time=51305..51370 rows=41100 loops=1)
+    -> Materialize  (cost=76775..76775 rows=32091) (actual time=51305..51305 rows=41100 loops=1)
+        -> Nested loop left join  (cost=73566 rows=32091) (actual time=0.52..50980 rows=41100 loops=1)
+            -> Nested loop left join  (cost=64060 rows=32091) (actual time=0.45..49820 rows=41100 loops=1)
+                -> Nested loop antijoin  (cost=1.89 rows=1) (actual time=1.34..1.35 rows=0.98 loops=32641)
+                    -> Filter: (o.is_deleted = 0)  (cost=4210 rows=22945) (actual time=0.38..1120 rows=32641 loops=1)
+                        -> Index range scan on o using idx_orders_created_at over ('2026-01-01' <= created_at)  (cost=4210 rows=45890) (actual time=0.22..840 rows=61420 loops=1)
+                    -> Index lookup on h using idx_history_order (order_id=o.id)  (cost=1.89 rows=1) (actual time=0.45..0.46 rows=1.85 loops=32641)
+                -> Index lookup on c using idx_cash_ref (ref_id=o.id)  (cost=0.12 rows=1) (actual time=0.10..0.11 rows=0.84 loops=41100)
+            -> Single-row index lookup on cu using PRIMARY (id=o.customer_id)  (cost=0.02 rows=1) (actual time=0.02..0.02 rows=0.99 loops=41100)`,
+};
+
+function analyzePlan(text) {
+  const nodes = [], filters = [];
+  let execMs = null, last = null, m;
+  for (const line of text.replace(/\u00a0/g, ' ').split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    if ((m = line.match(/Execution Time:\s*([\d.]+)\s*ms/i))) { execMs = parseFloat(m[1]); continue; }
+    if (last && (m = line.match(/Rows Removed by Filter:\s*([\d.]+)/i))) { last.removed = parseFloat(m[1]); continue; }
+    if (last && /Sort Method:.*Disk/i.test(line)) { last.disk = true; continue; }
+    if ((m = line.match(/^\s*Filter:\s*(.+)$/i))) {
+      if (last) last.filter = m[1].trim();
+      filters.push(m[1].trim());
+      continue;
+    }
+    const c = line.match(COST_RE), a = line.match(ACT_RE);
+    if (!c && !a) continue;
+    const op = line.replace(/^\s*->\s*/, '').replace(COST_RE, '').replace(ACT_RE, '').replace(/\s+/g, ' ').trim();
+    last = {
+      op: op || 'Operator', raw: line.trimEnd(), indent: line.search(/\S/),
+      estRows: c ? +c[2] : 0,
+      start: a && a[1] !== undefined ? +a[1] : 0,
+      endMs: a && a[2] !== undefined ? +a[2] : 0,
+      rows: a ? +a[3] : 0, loops: a ? +a[4] : 1, hasActual: !!a,
+      removed: 0, disk: false, filter: '', children: [],
+    };
+    nodes.push(last);
+  }
+  const roots = [], stack = [];
+  for (const n of nodes) {
+    while (stack.length && stack[stack.length - 1].indent >= n.indent) stack.pop();
+    const p = stack[stack.length - 1];
+    if (p) p.children.push(n); else roots.push(n);
+    stack.push(n);
+  }
+  if (!roots.length) return null;
+  const incl = (n) => n.endMs * n.loops;
+  const total = Math.max(execMs || 0, roots.reduce((s, r) => s + incl(r), 0), 0.001);
+  for (const n of nodes) {
+    n.incl = incl(n);
+    n.self = Math.max(0, n.incl - n.children.reduce((s, ch) => s + incl(ch), 0));
+    n.selfPct = Math.min(100, (n.self / total) * 100);
+    n.inclPct = Math.min(100, (n.incl / total) * 100);
+    const hi = Math.max(n.rows, n.estRows, 0.001), lo = Math.max(Math.min(n.rows, n.estRows), 0.001);
+    n.drift = hi / lo;
+    n.under = n.rows >= n.estRows;
+    if (/^Filter:/i.test(n.op)) filters.push(n.op);
+  }
+  return { nodes, roots, total, root: roots[0], filters: [...new Set(filters)].slice(0, 15) };
+}
+
+/* ---------- Findings: each rule has a precise trigger and a fix template ---------- */
+function findings(p) {
+  const { nodes, total } = p, out = [];
+  const pct = (x) => ((x / total) * 100).toFixed(1);
+
+  const scan = nodes.find((n) => /^Table scan on/.test(n.op));
+  if (scan) out.push({
+    badge: 'MATERIALIZATION',
+    title: `Full scan of a materialized view or CTE: ${scan.op.replace(/^Table scan on\s+/, '')}`,
+    why: 'MySQL materialized the view or CTE into a temporary table before the outer query could filter it. Views and CTEs with aggregates, DISTINCT, UNION, window functions, or LIMIT are not merged, so outer WHERE clauses run after the full materialization.',
+    sql: '-- Push the filter into the view or CTE, or query the base tables directly:\nSELECT ... FROM <base_table> WHERE <filter>;',
+  });
+
+  const aj = topBy(nodes.filter((n) => /^Nested loop antijoin\b/.test(n.op) && n.loops >= 10), 'incl');
+  if (aj) out.push({
+    badge: `NOT EXISTS · ${pct(aj.incl)}%`,
+    title: `Correlated NOT EXISTS probed ${fmtInt(aj.loops)} times`,
+    why: `Each probe takes about ${aj.endMs.toFixed(3)} ms, and the antijoin accounts for ${fmtMs(aj.incl)} of runtime. A correlated NOT EXISTS over a versioned table repeats the same lookup for every outer row.`,
+    sql: '-- One pass that keeps the latest row per key:\nSELECT ... FROM (\n  SELECT <cols>, ROW_NUMBER() OVER (PARTITION BY <key> ORDER BY <version_col> DESC) AS rn\n  FROM <base_table>\n) latest\nWHERE latest.rn = 1;',
+  });
+
+  const lk = nodes.filter((n) => /^Index lookup on\s/.test(n.op) && !/using PRIMARY/.test(n.op) && n.loops >= 100);
+  if (lk.length) {
+    const top = topBy(lk, 'self');
+    const [, tbl = '<table>', idx = '<index>'] = top.op.match(/on\s+(\S+)\s+using\s+(\S+)/) || [];
+    const col = (top.op.match(/\(\s*([\w$`]+)\s*=/) || [])[1] || '<join_col>';
+    out.push({
+      badge: 'NON-COVERING INDEX',
+      title: `Non-covering index lookups on ${tbl} (${fmtInt(top.loops)} loops)`,
+      why: `${idx} finds the matching rows, then InnoDB reads each one from the clustered index. These steps cost ${fmtMs(lk.reduce((s, n) => s + n.self, 0))} in total. The plan shows the alias ${tbl}, not the base table name.`,
+      sql: `-- Replace <base_table> with the table behind alias ${tbl}.\n-- Covering index: join key, filter columns, then selected columns.\nCREATE INDEX idx_<base_table>_covering\n    ON <base_table> (${col}, <filter_cols>, <selected_cols>);`,
+    });
+  }
+
+  const srt = topBy(nodes.filter((n) => /^(Sort\b|Temporary table|Aggregate using temporary table)/i.test(n.op) || n.disk), 'self');
+  if (srt) out.push(srt.disk
+    ? {
+      badge: 'SORT SPILL', title: `Sort spilled to disk (${fmtMs(srt.self)})`,
+      why: 'The sort did not fit in memory. A larger work_mem for this transaction, or an index that matches ORDER BY, avoids the spill.',
+      sql: "BEGIN;\nSET LOCAL work_mem = '128MB';\n-- re-run the query here, then ROLLBACK;",
+    }
+    : {
+      badge: 'SORT / TEMP TABLE', title: `Sort or temporary table costs ${fmtMs(srt.self)}`,
+      why: `${srt.op.slice(0, 80)}. An index whose leading columns match the WHERE equality columns, then the ORDER BY columns, lets the engine read rows already in order.`,
+      sql: 'CREATE INDEX idx_<table>_sort\n    ON <table> (<equality_cols>, <order_by_cols>);',
+    });
+
+  const cv = nodes.find((n) => /convert\s*\(/i.test(n.op) || /convert\s*\(/i.test(n.filter));
+  if (cv) out.push({
+    badge: 'IMPLICIT CONVERSION',
+    title: 'Implicit convert() in a filter can block index use',
+    why: 'The comparison converts a column or parameter at run time. Make the parameter type and collation match the column.',
+    sql: "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_SET_NAME, COLLATION_NAME\nFROM information_schema.COLUMNS\nWHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '<table>';",
+  });
+
+  const dr = topBy(nodes.filter((n) => n.drift >= 2 && Math.max(n.rows, n.estRows) >= 100), 'drift');
+  if (dr) out.push({
+    badge: `${dr.drift.toFixed(1)}× ESTIMATE`,
+    title: `Row estimate off by ${dr.drift.toFixed(1)}×`,
+    why: `${dr.op.slice(0, 80)} estimated ${fmtInt(dr.estRows)} rows and returned ${fmtInt(dr.rows)}. Stale statistics push the optimizer toward poor join orders.`,
+    sql: '-- Use base table names. ANALYZE does not accept aliases or views.\nANALYZE TABLE <base_table>;        -- MySQL\n-- ANALYZE <base_table>;               -- PostgreSQL',
+  });
+
+  const ss = topBy(nodes.filter((n) => /^Seq Scan on/.test(n.op) && n.removed >= 10000), 'removed');
+  if (ss) out.push({
+    badge: 'SEQ SCAN',
+    title: `${ss.op.slice(0, 60)} discards ${fmtInt(ss.removed)} rows`,
+    why: 'The scan reads the whole table and throws away most rows in its filter. An index on the filter columns reads only matching rows.',
+    sql: `CREATE INDEX CONCURRENTLY idx_<table>_filter\n    ON <table> (<filter_cols>);\n-- Filter: ${ss.filter || '<see plan>'}`,
+  });
+
+  const nl = topBy(nodes.filter((n) => /^Nested Loop\b/.test(n.op) && n.children[1] && /^Seq Scan/.test(n.children[1].op) && n.children[1].loops >= 100), 'self');
+  if (nl) out.push({
+    badge: 'NESTED LOOP',
+    title: `Nested Loop rescans ${nl.children[1].op.slice(0, 60)} ${fmtInt(nl.children[1].loops)} times`,
+    why: 'Each outer row triggers a full scan of the inner table. An index on the join column turns each rescan into an index probe.',
+    sql: 'CREATE INDEX CONCURRENTLY idx_<inner_table>_join\n    ON <inner_table> (<join_col>);',
+  });
+
+  if (!out.length) {
+    const top = topBy(nodes, 'self');
+    out.push({
+      badge: 'GENERAL',
+      title: `Largest self time: ${top.op.slice(0, 60)}`,
+      why: "No known pattern matched. Check this operator's row estimates and loop count, and whether its filter and join columns are indexed.",
+      sql: '-- Index the filter and join columns of the table behind this operator, equality columns first.',
+    });
+  }
+  return out;
+}
+
+/* ---------- Report and rendering ---------- */
+function buildReport(p, fx) {
+  const { root, total, nodes } = p, top = topBy(nodes, 'self');
+  const task = {
+    SP: 'Refactor this stored procedure. Remove high-loop inner lookups, correlated antijoins, and unnecessary materialization. Provide exact CREATE INDEX DDL. Keep output columns and semantics identical.',
+    VIEW: 'Refactor this view, or replace it with an index-friendly parameterized query, so predicates push down without materialization. Provide exact CREATE INDEX DDL. Keep results identical.',
+    QUERY: 'Rewrite this query and provide exact CREATE INDEX DDL to remove the top self-time bottlenecks. Keep results identical.',
+  }[state.objType];
+  const kind = { SP: 'stored procedure', VIEW: 'view', QUERY: 'query' }[state.objType];
+  const tables = new Set(), indexes = new Set();
+  for (const n of nodes) {
+    const t = n.op.match(/\bon\s+([`\w$.]+)/i), ix = n.op.match(/\busing\s+([`\w$.]+)/i);
+    if (t && !t[1].startsWith('<')) tables.add(t[1]);
+    if (ix) indexes.add(ix[1]);
+  }
+  const L = [
+    `# SQL performance request: ${kind}`, '', `> ${task}`, '',
+    '## 1. Execution summary',
+    `- Total runtime: ${fmtMs(total)} (first row after ${root.start.toFixed(2)} ms)`,
+    `- Root rows: ${fmtInt(root.estRows)} estimated, ${fmtInt(root.rows)} actual (${root.drift.toFixed(2)}x ${root.under ? 'under' : 'over'}-estimate)`,
+    `- Largest self time: ${code(top.op)}, ${fmtMs(top.self)} (${top.selfPct.toFixed(1)}% of runtime)`, '',
+    '## 2. Ranked operators (exclusive self time)',
+  ];
+  [...nodes].sort((a, b) => b.self - a.self).slice(0, 6).forEach((n, i) => L.push(
+    `${i + 1}. ${code(n.op)}`,
+    `   - Self ${fmtMs(n.self)} (${n.selfPct.toFixed(1)}%), inclusive ${fmtMs(n.incl)}`,
+    `   - ${fmtInt(n.loops)} loops at ${n.endMs.toFixed(3)} ms per loop; rows ${fmtInt(n.estRows)} estimated, ${fmtInt(n.rows)} actual`,
+  ));
+  L.push('', '## 3. Tables, indexes, and filters',
+    `- Tables or aliases: ${[...tables].map(code).join(', ') || 'none named'}`,
+    `- Indexes: ${[...indexes].map(code).join(', ') || 'none named (possible scans)'}`,
+    ...(p.filters.length ? p.filters.map((f) => `- Filter: ${code(f)}`) : ['- Filters: none extracted']),
+    '', '## 4. Detected problems and suggested fixes');
+  fx.forEach((f, i) => L.push(`${i + 1}. ${f.title}`, `   - ${f.why}`, '   ```sql', ...f.sql.split('\n').map((l) => `   ${l}`), '   ```'));
+  const crit = nodes.filter((n) => n.selfPct >= 5 || n.inclPct >= 25 || n.loops >= 1000).slice(0, 20);
+  const sql = $('incSql').checked ? $('src').value.trim() : '';
+  L.push('', '## 5. Costly plan operators', '```text', ...crit.map((n) => n.raw), '```',
+    '', `## 6. Target ${kind}`, '```sql', sql || '-- [paste the SP, view, or query here]', '```');
+  return L.join('\n') + '\n';
+}
+
+const kv = (id, text) => { $(id).textContent = text; };
+function renderPlan() {
+  const raw = $('plan').value;
+  const p = raw.trim() ? analyzePlan(raw) : null;
+  if (!p || !p.nodes.some((n) => n.hasActual)) {
+    const msg = raw.trim()
+      ? 'No EXPLAIN ANALYZE timings found. Paste output that includes (actual time=... rows=... loops=...).'
+      : 'Paste EXPLAIN ANALYZE output to build the report.';
+    kv('kRun', '—'); kv('kRunSub', raw.trim() ? 'No timings' : 'Paste a plan');
+    kv('kBot', '—'); kv('kBotSub', '—'); kv('kDrift', '—'); kv('kDriftSub', '—');
+    state.report = msg;
+    $('report').value = msg;
+    $('breakdown').innerHTML = `<p class="callout">${esc(msg)}</p>`;
+    return;
+  }
+  const fx = findings(p), top = topBy(p.nodes, 'self'), root = p.root;
+  kv('kRun', fmtMs(p.total));
+  kv('kRunSub', `Startup ${root.start.toFixed(2)} ms · ${p.nodes.length} operators`);
+  kv('kBot', `${top.selfPct.toFixed(1)}%`);
+  kv('kBotSub', top.op.slice(0, 60));
+  kv('kDrift', `${fmtInt(root.estRows)} → ${fmtInt(root.rows)}`);
+  kv('kDriftSub', `${root.drift.toFixed(2)}× ${root.under ? 'under' : 'over'}-estimated`);
+  state.report = buildReport(p, fx);
+  $('report').value = state.report;
+  $('breakdown').innerHTML = `
+    <p class="callout">Wall-clock runtime <strong>${fmtMs(p.total)}</strong>. The largest self-time operator is <code>${esc(top.op.slice(0, 90))}</code>, using <strong>${top.selfPct.toFixed(1)}%</strong> of runtime.</p>
+    <h3>Operators by self time</h3>
+    <ol class="ops">${[...p.nodes].sort((a, b) => b.self - a.self).slice(0, 6).map((n) => `
+      <li><div class="op-head"><code>${esc(n.op.slice(0, 90))}</code><span>${n.selfPct.toFixed(1)}% · ${fmtMs(n.self)}</span></div>
+      <div class="bar"><span style="width:${Math.max(2, n.selfPct).toFixed(1)}%"></span></div>
+      <div class="meta">${fmtInt(n.loops)} loops · ${n.endMs.toFixed(3)} ms/loop · rows ${fmtInt(n.estRows)} est → ${fmtInt(n.rows)} actual</div></li>`).join('')}</ol>
+    <h3>Findings</h3>
+    ${fx.map((f) => `<article class="finding"><header><h4>${esc(f.title)}</h4><span class="tag">${esc(f.badge)}</span></header><p>${esc(f.why)}</p><pre>${esc(f.sql)}</pre></article>`).join('')}`;
+}
+
+/* ---------- Clipboard, toast, tabs, theme, wiring ---------- */
+let toastTimer;
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+async function copyText(text, ok) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(ok);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const done = document.execCommand('copy');
+    ta.remove();
+    toast(done ? ok : 'Copy failed. Select the text and press Ctrl/Cmd+C.');
+  }
+}
+const bindGroup = (sel, key, fn) => $$(sel).forEach((btn) => btn.addEventListener('click', () => {
+  $$(sel).forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+  fn(btn.dataset[key]);
+}));
+function showTab(n) {
+  $$('.tab').forEach((b) => b.setAttribute('aria-selected', String(+b.dataset.tab === n)));
+  $('panel1').hidden = n !== 1;
+  $('panel2').hidden = n !== 2;
+}
+$$('.tab').forEach((b) => b.addEventListener('click', () => showTab(+b.dataset.tab)));
+$('next').addEventListener('click', () => { showTab(2); $('plan').focus(); });
+
+$$('[data-sample]').forEach((b) => b.addEventListener('click', () => {
+  $('src').value = SAMPLES[b.dataset.sample];
+  refresh();
+}));
+$('clearSrc').addEventListener('click', () => { $('src').value = ''; refresh(); });
+$('src').addEventListener('input', debounce(refresh, 150));
+bindGroup('[data-dialect]', 'dialect', (v) => { state.dialect = v; refresh(); });
+bindGroup('[data-bind]', 'bind', (v) => { state.bind = v; refresh(); });
+$('paramGrid').addEventListener('input', (e) => {
+  const v = state.vars.get(e.target.dataset.key);
+  if (v) { v.value = e.target.value; generate(); }
+});
+$('copy1').addEventListener('click', () => copyText(state.sql, 'Script copied'));
+
+$('plan').addEventListener('input', debounce(renderPlan, 150));
+bindGroup('[data-obj]', 'obj', (v) => { state.objType = v; renderPlan(); });
+bindGroup('[data-view]', 'view', (v) => {
+  state.view = v;
+  $('report').hidden = v !== 'prompt';
+  $('breakdown').hidden = v === 'prompt';
+});
+$('incSql').addEventListener('change', renderPlan);
+$('wrap').addEventListener('click', (e) => {
+  const on = $('plan').classList.toggle('wrap');
+  e.currentTarget.setAttribute('aria-pressed', String(on));
+});
+$('sample2').addEventListener('click', () => { $('plan').value = SAMPLES.plan; renderPlan(); });
+$('clear2').addEventListener('click', () => { $('plan').value = ''; renderPlan(); });
+$('copyRep').addEventListener('click', () => copyText(state.report, 'Prompt copied'));
+
+const setTheme = (t) => {
+  document.documentElement.dataset.theme = t;
+  $('themeBtn').textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
+};
+$('themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+refresh();
+})();
+</script>
+</body>
+</html>
